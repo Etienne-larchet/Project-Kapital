@@ -1,2 +1,3 @@
-pipreqs --ignore .venv 
+pipreqs --ignore .venv
+
 pip install requirements.txt

@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
-import yfinance as yf
 import pandas as pd
 
 
 @dataclass(kw_only=True)
 class Security:
+    quantity: int
     risk: int | None = None
-    quantity: int | None = None
     variance: int | None = None
     sd: int | None = None
     history = pd.DataFrame({
@@ -27,8 +26,9 @@ class Stock(Security):
     sector: str | None = None
     country: str | None = None
 
-    def __init__(self, ticker: str, sector: str | None = None, country: str | None = None):
+    def __init__(self, ticker: str, quantity:int, sector: str | None = None, country: str | None = None):
         self.ticker = ticker
+        self.quantity = quantity
         self.sector = sector
         self.country = country
 
@@ -45,12 +45,17 @@ class Portfolio:
     bonds: SecuritiesList = field(default_factory=SecuritiesList)
     stats: dict = field(default_factory=dict)
     
-    def add_security(self, type: int, ticker: str):
+    def add_security(self, type: int, ticker: str, quantity: int):
         match type:
             case 0:
-                    self.stocks.positions[ticker] = Stock(ticker)
+                    self.stocks.positions[ticker] = Stock(ticker, quantity = quantity)
 
 
-ptf = Portfolio()
-ptf.add_security(0, "msft")
-print(ptf.stocks.positions)
+def main():
+    ptf = Portfolio()
+    ptf.add_security(0, "msft", 1)
+    print(ptf.stocks.positions)
+     
+
+if __name__ == "__main__":
+    main()
