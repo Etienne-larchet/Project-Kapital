@@ -46,7 +46,7 @@ class SecuritiesList:
     positions: list[Security] = field(default_factory=list)
     stats: dict = field(default_factory=dict) # WIP
 
-    def mass_fetch_history(self, start_date: str, end_date: str):
+    def fetch_history_many(self, start_date: str, end_date: str):
         # Expected date format: 'YYYY-MM-DD'
         tickers = []
         for ticker in self.positions.keys():
@@ -54,11 +54,26 @@ class SecuritiesList:
         data = yf.download(tickers, start=start_date, end=end_date, group_by="ticker")
         return data
     
-    def update(self):
-        # WIP
-        pass
+    def fetch_history(): # WIP
+        pass 
+    
+    def update(self, ticker: str, update_security: dict, upsert: bool = False):
 
-    def add(self, security):
+        for el in self.positions:
+            if ticker == el.ticker:
+                for key, value in update_security.items():
+                    el[key] = value
+                return
+        if upsert == True:
+            update_security.update({"ticker":ticker})
+            self.add(update_security)
+
+
+
+
+
+
+    def add(self, security: Security):
             self.positions.append(self.security_type(**security))
 
     def from_dict(self, data):
@@ -82,10 +97,14 @@ class Portfolio:
                 pass # Use for bonds, WIP
 
     def export(self, file_path: str)-> None:
-        with open(file_path, "w") as file:
-            ex = asdict(self)
-            del ex["bonds"]["security_type"], ex["stocks"]["security_type"]
-            json.dump(ex, file, indent=4)
+        try:
+            with open(file_path, "w") as file:
+                ex = asdict(self)
+                del ex["bonds"]["security_type"], ex["stocks"]["security_type"]
+                json.dump(ex, file, indent=4)
+        except Exception as e:
+            print("Error while saving:", e)
+            sys.exit()
     
     def load(self, file_path: str) -> int:
         try:
@@ -97,8 +116,6 @@ class Portfolio:
         except Exception as e:
             print(f'Error: {e}')
             sys.exit()
-        return 1
-        
         for attr, value in data.items():
             match attr:
                 case "bonds":
@@ -107,6 +124,7 @@ class Portfolio:
                      self.stocks.from_dict(value)
                 case "stats":
                     self.stats = value
+        return 1
         
         
 
