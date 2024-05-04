@@ -11,10 +11,13 @@ class Security:
     risk: int | None = None
     variance: int | None = None
     sd: int | None = None
-    history = pd.DataFrame({
-         "date_str": [], 
-         "date_ts": [], # not used for now  
-    })
+    history: dict = field(default_factory=dict)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    def __setitem__(self, key, value) -> None:
+        setattr(self, key, value)
 
 
 @dataclass
@@ -29,9 +32,7 @@ class Stock(Security):
         self.ticker = ticker
         self.sector = sector
         self.country = country
-        self.t212_id = t212_id
-        for i in ['open', 'close', 'adjusted']:
-            self.history[i] = None
+        self.t212_id = t212_id       
 
 
 @dataclass
@@ -48,39 +49,56 @@ class SecuritiesList:
 
     def fetch_history_many(self, start_date: str, end_date: str):
         # Expected date format: 'YYYY-MM-DD'
-        tickers = []
-        for ticker in self.positions.keys():
-            tickers.append(ticker)
-        data = yf.download(tickers, start=start_date, end=end_date, group_by="ticker")
-        return data
+        tickers = [] # Update to be able to select which tickers to use, default is all.
+        for security in self.positions:
+            tickers.append(security.ticker)
+        tickers.remove('')
+        df = yf.download(tickers, start=start_date, end=end_date, group_by="ticker")
+        self._handle_fetch_history(df)
     
     def fetch_history(): # WIP
-        pass 
-    
-    def update(self, ticker: str, update_security: dict, upsert: bool = False):
+        pass
 
+    def _handle_fetch_history(self, df: pd.DataFrame)-> None:
+        tickers = df.columns.levels[0]
+        df_list = [(ticker, df[ticker]) for ticker in tickers]
+        for ticker, df in df_list:
+            df.index = df.index.astype('int64') # Convert Datetime object to timestamp int
+            history = df.to_dict(orient="index")
+            print(ticker)
+            self.update(ticker, {'history': history})
+    
+    def update(self, ticker: str, update_security: dict, upsert: bool = False) -> tuple:
         for el in self.positions:
             if ticker == el.ticker:
                 for key, value in update_security.items():
-                    el[key] = value
-                return
+                    if isinstance(value, dict): # progess to do, for now only one level dict is allowed => transform it to recursive function to handle more layers
+                        for col, col_value in value.items():
+                            el[key][col] = col_value
+                    else:
+                        el[key] = value
+                return 1, f"Security'{ticker}' updated"
         if upsert == True:
-            update_security.update({"ticker":ticker})
+            update_security["ticker"] = ticker
             self.add(update_security)
+            return 2, f"Security '{ticker}' added"
+        return 0, f"Security '{ticker}' not found"
 
-
-
-
-
-
-    def add(self, security: Security):
+    def add(self, security: Security) -> None:
             self.positions.append(self.security_type(**security))
 
-    def from_dict(self, data):
+    def from_dict(self, data) -> None:
         self.stats = data["stats"]
         positions = data["positions"]
         for pos in positions:
             self.positions.append(self.security_type(**pos))
+
+    def get(self, ticker: str):
+        for security in self.positions:
+            if ticker == security.ticker:
+                return security
+        return 0, "Security not found"
+
 
 
 @dataclass
@@ -104,6 +122,7 @@ class Portfolio:
                 json.dump(ex, file, indent=4)
         except Exception as e:
             print("Error while saving:", e)
+            print('data:', file)
             sys.exit()
     
     def load(self, file_path: str) -> int:
