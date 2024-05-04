@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 import json
 import sys
+from typing import Literal
 
 
 @dataclass(kw_only=True)
@@ -49,10 +50,7 @@ class SecuritiesList:
 
     def fetch_history_many(self, start_date: str, end_date: str):
         # Expected date format: 'YYYY-MM-DD'
-        tickers = [] # Update to be able to select which tickers to use, default is all.
-        for security in self.positions:
-            tickers.append(security.ticker)
-        tickers.remove('')
+        tickers = [security.ticker for security in self.positions if security.ticker != ''] # Update to be able to select which tickers to use, default is all.
         df = yf.download(tickers, start=start_date, end=end_date, group_by="ticker")
         self._handle_fetch_history(df)
     
@@ -63,9 +61,9 @@ class SecuritiesList:
         tickers = df.columns.levels[0]
         df_list = [(ticker, df[ticker]) for ticker in tickers]
         for ticker, df in df_list:
-            df.index = df.index.astype('int64') # Convert Datetime object to timestamp int
+            df.index = df.index.strftime('%d/%m/%Y') # Convert Datetime object to str // .astype('int64') for ts format
+            df = df.dropna(axis='index', how='all')
             history = df.to_dict(orient="index")
-            print(ticker)
             self.update(ticker, {'history': history})
     
     def update(self, ticker: str, update_security: dict, upsert: bool = False) -> tuple:
@@ -107,11 +105,11 @@ class Portfolio:
     bonds: SecuritiesList = field(default_factory=lambda: SecuritiesList(Bond))
     stats: dict = field(default_factory=dict)
     
-    def add_security(self, type: int, ticker: str, quantity: int) -> None:
+    def add_security(self, type: Literal['stock', 'bond'], ticker: str, **kwargs) -> None:
         match type:
-            case 0: 
-                    self.stocks.positions.append(Stock(ticker, quantity = quantity))
-            case 1:
+            case "stock": 
+                    self.stocks.positions.append(Stock(ticker, **kwargs))
+            case "bond":
                 pass # Use for bonds, WIP
 
     def export(self, file_path: str)-> None:
@@ -119,7 +117,7 @@ class Portfolio:
             with open(file_path, "w") as file:
                 ex = asdict(self)
                 del ex["bonds"]["security_type"], ex["stocks"]["security_type"]
-                json.dump(ex, file, indent=4)
+                json.dump(ex, file, indent=4, skipkeys=True)
         except Exception as e:
             print("Error while saving:", e)
             print('data:', file)
@@ -150,7 +148,7 @@ class Portfolio:
 def main() -> None:
     ptf = Portfolio()
     ptf.load("Portfolio.json")
-    ptf.add_security(0, "ticker_test100", 100)
+    ptf.add_security("stock", "ticker_test100")
     ptf.export("Portfolio.json")
      
 
