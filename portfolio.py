@@ -1,45 +1,10 @@
 from dataclasses import dataclass, field, asdict
+from securities import Stock, Bond, Security
 import pandas as pd
 import yfinance as yf
 import json
 import sys
 from typing import Literal
-
-
-@dataclass(kw_only=True)
-class Security:
-    quantity: int | None = None
-    risk: int | None = None
-    variance: int | None = None
-    sd: int | None = None
-    history: dict = field(default_factory=dict)
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-    
-    def __setitem__(self, key, value) -> None:
-        setattr(self, key, value)
-
-
-@dataclass
-class Stock(Security):
-    ticker: str
-    sector: str | None = None
-    country: str | None = None
-    t212_id: str | None = None
-
-    def __init__(self, ticker: str, sector: str | None = None, country: str | None = None, t212_id: str | None = None, **kwargs):
-        super().__init__(**kwargs)
-        self.ticker = ticker
-        self.sector = sector
-        self.country = country
-        self.t212_id = t212_id       
-
-
-@dataclass
-class Bond(Security):
-    # WIP
-    pass
 
 
 @dataclass
@@ -58,8 +23,7 @@ class SecuritiesList:
         pass
 
     def _handle_fetch_history(self, df: pd.DataFrame)-> None:
-        tickers = df.columns.levels[0]
-        df_list = [(ticker, df[ticker]) for ticker in tickers]
+        df_list = [(ticker, df[ticker]) for ticker in df.columns.levels[0]]
         for ticker, df in df_list:
             df.index = df.index.strftime('%d/%m/%Y') # Convert Datetime object to str // .astype('int64') for ts format
             df = df.dropna(axis='index', how='all')
@@ -96,7 +60,6 @@ class SecuritiesList:
             if ticker == security.ticker:
                 return security
         return 0, "Security not found"
-
 
 
 @dataclass
@@ -142,15 +105,3 @@ class Portfolio:
                 case "stats":
                     self.stats = value
         return 1
-        
-        
-
-def main() -> None:
-    ptf = Portfolio()
-    ptf.load("Portfolio.json")
-    ptf.add_security("stock", "ticker_test100")
-    ptf.export("Portfolio.json")
-     
-
-if __name__ == "__main__":
-    main()
