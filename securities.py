@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+
 @dataclass(kw_only=True)
 class Security:
     quantity: int | None = None
