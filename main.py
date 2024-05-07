@@ -2,17 +2,10 @@ import pandas as pd
 import requests
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 from portfolio import Portfolio
 from Oath import ApiKeys
-
-
-def get_broker_portfolio(url, headers) -> list:
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        print(f"Error: {response.status_code} while fetching data")
-        sys.exit()
-    return response.json()
 
 def get_ticker(stocks_list: dict) -> dict:
     data = {
@@ -33,8 +26,11 @@ def fetch_broker() -> dict:
     url = "https://live.trading212.com/api/v0/equity/portfolio"
     headers = {"Authorization": ApiKeys.t212}
     print("Fetching portfolio positions from broker.")
-    data = get_broker_portfolio(url, headers)
-    return data
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error: {response.status_code} while fetching data")
+        sys.exit()
+    return response.json()
 
 def define_new_tickers(ptf: Portfolio, broker_data: dict) -> list:
     ptf_tickers = [(i['t212_id'], i['ticker']) for i in ptf.stocks.positions]
@@ -46,7 +42,8 @@ def define_new_tickers(ptf: Portfolio, broker_data: dict) -> list:
     # New Stocks
     for index, stock in enumerate(new_stocks):
         ticker = input(f'{index+1}/{len(new_stocks)} - Yfinance ticker for {stock['ticker']} : ')
-        update.append([ticker, {'t212_id': stock['ticker'], 'quantity': stock['quantity']}])
+        if ticker != "":
+            update.append([ticker, {'t212_id': stock['ticker'], 'quantity': stock['quantity']}])
 
     # Old Stocks 
     for stock in old_stocks:
@@ -70,15 +67,15 @@ def main() -> None:
     # Create Portfolio instance
     ptf = Portfolio()
     ptf.load("Portfolio.json")
-    # # Fetch broker positions
-    # broker_data = fetch_broker()
-    # # Select new tickers and create/ update stock instances within the portfolio
-    # update = define_new_tickers(ptf, broker_data)
-    # for el in update:
-    #     ptf.stocks.update(el[0], el[1], upsert=True)
+    # Fetch broker positions
+    broker_data = fetch_broker()
+    # Select new tickers and create/ update stock instances within the portfolio
+    update = define_new_tickers(ptf, broker_data)
+    for el in update:
+        ptf.stocks.update(el[0], el[1], upsert=True)
 
     # Fetch prices history for each stock of the portfolio
-    # ptf.stocks.fetch_history_many("2021-01-01", "2023-12-31")
+    ptf.stocks.fetch_history_many("2019-01-01", "2023-12-31")
 
     # Load portfolio data in a datafame
     stocks = ptf.stocks.positions
@@ -106,30 +103,56 @@ def main() -> None:
     ptf_variances = np.array(ptf_variances)
 
     # Calculate portfolio standard deviation
-    ptf_sd = np.sqrt(ptf_variances)
+    ptf_sd = np.sqrt(ptf_variances) * np.sqrt(252)
 
     # Calculate portfolio returns
     stocks_annualized_returns = ((1+stocks_log_return.mean()) ** 252 ) -1
     ptf_returns = np.dot(weights, stocks_annualized_returns)
-    # print(ptf_returns)
 
     # Calculate the sharpe ratio
-    sharpe_ratios = ptf_sd / ptf_returns
+    sharpe_ratios = ptf_returns / ptf_sd
     # print(sharpe_ratios)
 
-    # Concatenate all data for csv conversion
-    expert1 = {
+    # Concatenate all data
+    ratios = {
         'sharpe ratio': sharpe_ratios, 
         'Expected return': ptf_returns, 
         'standart Deviation': ptf_sd
     }
-    a = pd.DataFrame(expert1)
-    print(a)
-    export = pd.concat([a, weights], axis=0)
-    print(export)
+    ratios = pd.DataFrame(ratios)
+    globaltbl = pd.merge(ratios, weights, right_index=True, left_index=True, how='left')
+
+
+    # Display result
+    print("\nMax sharpe ratio")
+    max_sharpe_idx = globaltbl['sharpe ratio'].idxmax()
+    print(globaltbl.iloc[max_sharpe_idx])
+    plt.figure(figsize=(8, 6))
+    plt.pie(weights.iloc[max_sharpe_idx], labels=tickers, autopct='%1.1f%%', startangle=140)
+    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    plt.title('Max sharpe ratio')
+    plt.show()
+
+
+    print("\nMax return")
+    max_return_idx = globaltbl['Expected return'].idxmax()
+    print(globaltbl.iloc[max_return_idx])
+    plt.figure(figsize=(8, 6))
+    plt.pie(weights.iloc[max_return_idx], labels=tickers, autopct='%1.1f%%', startangle=140)
+    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    plt.title('Max return')
+    plt.show()
+
+    print('\nMin volatility')
+    min_stdev_idx = globaltbl['standart Deviation'].idxmin()
+    print(globaltbl.iloc[min_stdev_idx])
+    print(tickers)
     ptf.export("Portfolio.json")
-
-
+    plt.figure(figsize=(8, 6))
+    plt.pie(weights.iloc[min_stdev_idx], labels=tickers, autopct='%1.1f%%', startangle=140)
+    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    plt.title('Min volatility')
+    plt.show()
 
 
 if __name__ == "__main__":
