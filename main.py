@@ -67,8 +67,10 @@ def main() -> None:
     # Create Portfolio instance
     ptf = Portfolio()
     ptf.load("Portfolio.json")
+
     # Fetch broker positions
     broker_data = fetch_broker()
+
     # Select new tickers and create/ update stock instances within the portfolio
     update = define_new_tickers(ptf, broker_data)
     for el in update:
@@ -111,7 +113,6 @@ def main() -> None:
 
     # Calculate the sharpe ratio
     sharpe_ratios = ptf_returns / ptf_sd
-    # print(sharpe_ratios)
 
     # Concatenate all data
     ratios = {
@@ -146,13 +147,14 @@ def main() -> None:
     print('\nMin volatility')
     min_stdev_idx = globaltbl['standart Deviation'].idxmin()
     print(globaltbl.iloc[min_stdev_idx])
-    print(tickers)
-    ptf.export("Portfolio.json")
     plt.figure(figsize=(8, 6))
     plt.pie(weights.iloc[min_stdev_idx], labels=tickers, autopct='%1.1f%%', startangle=140)
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     plt.title('Min volatility')
     plt.show()
+
+    # Save the Portfolio
+    ptf.export("Portfolio.json")
 
 
 if __name__ == "__main__":
