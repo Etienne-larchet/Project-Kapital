@@ -3,8 +3,10 @@ import requests
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from time import time
 
 from portfolio import Portfolio
+from decorators import display_progress
 from Oath import ApiKeys
 
 def get_ticker(stocks_list: dict) -> dict:
@@ -55,12 +57,38 @@ def define_new_tickers(ptf: Portfolio, broker_data: dict) -> list:
 
     return update
 
-def generate_random_weights(stocks):
-    # Generate random weights
-    weights = np.random.rand(len(stocks))
-    # Normalize weights to sum up to 1
-    weights /= np.sum(weights)
-    return weights
+def generate_randoms_proba(probas_req: dict, arraysize=1) -> pd.DataFrame:
+    """
+    Generate random probability distributions given specified minimum and maximum bounds for each ticker.
+
+    **Example usage:**
+    >>> probas_req = {
+    >>> 'tickers': ['AAPL', 'AMZN', 'MSFT'],
+    >>> 'min': [0.05, 0.1, 0.1],
+    >>> 'max': [0.5, 0.6, 0.3]
+    >>> }
+    >>> result = generate_randoms_proba(probas_req, 300)
+    >>> print(result)
+    """
+    def _weights_calc(min_probs, max_probs, n):
+        random_values = np.random.default_rng().random(size=(arraysize, n), dtype=np.float32)
+        weights = min_probs + max_probs * random_values
+        weights /= weights.sum(axis=1, keepdims=True)
+        return weights
+    
+    n = len(probas_req['tickers'])
+    min_probs = probas_req.get('min', None)
+    max_probs = probas_req.get('max', None)
+    if not min_probs:
+        min_probs = np.zeros(n)
+    if not max_probs:
+        max_probs = np.ones(n)
+    if sum(min_probs) > 1:
+        raise ValueError("Sum of min probabilities must be inferior to 1")
+    elif sum(max_probs) < 1:
+        raise ValueError("Sum of max probabilities must be superior to 1")  
+    weights = _weights_calc(min_probs=min_probs, max_probs=max_probs, n=n)
+    return pd.DataFrame(weights, columns=probas_req['tickers'])
 
     
 def main() -> None:
@@ -71,7 +99,7 @@ def main() -> None:
     # Fetch broker positions
     broker_data = fetch_broker()
 
-    # Select new tickers and create/ update stock instances within the portfolio
+    # Select new tickers and create / update stock instances within the portfolio
     update = define_new_tickers(ptf, broker_data)
     for el in update:
         ptf.stocks.update(el[0], el[1], upsert=True)
@@ -88,21 +116,36 @@ def main() -> None:
         ptf_data[stock.ticker] = log_return
     
     tickers = ptf_data.keys()
+    print(tickers)
     stocks_log_return = pd.concat(ptf_data.values(), keys=tickers, axis=1).dropna(axis='index')
 
     # Determine the X number of randoms weights
-    stocks_weights = []
-    for _ in range(10000):
-        weight = generate_random_weights(tickers)
-        stocks_weights.append(weight)
-    weights = pd.DataFrame(stocks_weights, columns=tickers)
+    print('Generating random weights')
+    a = time()
+    weights = generate_randoms_proba(probas_req={'tickers':tickers}, arraysize=1000000)
+    print(time()-a)
+
 
     # Calculate portfolio variance
-    ptf_variances = []
-    for _, row in weights.iterrows():
-        ptf_variance = np.dot(np.dot(row, stocks_log_return.cov()), row.T)
-        ptf_variances.append(ptf_variance)
-    ptf_variances = np.array(ptf_variances)
+    # a = time()
+    # ptf_variances = []
+    # for _, row in weights.iterrows():
+    #     ptf_variance = np.dot(np.dot(row, stocks_log_return.cov()), row.T)
+    #     ptf_variances.append(ptf_variance)
+    # ptf_variances = np.array(ptf_variances)
+    # print('method1:', time()-a)
+
+    print('Variance calculations')
+    a = time()
+    # Convert weights DataFrame to a NumPy array for vectorized operations
+    # weights_array = weights.to_numpy()
+    # Alternatively, using dot product if einsum is not preferred
+    # ptf_variances = np.diag(np.dot(np.dot(weights, stocks_log_return.cov()), weights.T))
+    # print(ptf_variances)
+    ptf_variances = np.sum(np.dot(weights, stocks_log_return.cov()) * weights, axis=1)
+    # print(ptf_variances)
+    print('method2:', time()-a)
+
 
     # Calculate portfolio standard deviation
     ptf_sd = np.sqrt(ptf_variances) * np.sqrt(252)
@@ -148,13 +191,13 @@ def main() -> None:
     min_stdev_idx = globaltbl['standart Deviation'].idxmin()
     print(globaltbl.iloc[min_stdev_idx])
     plt.figure(figsize=(8, 6))
-    plt.pie(weights.iloc[min_stdev_idx], labels=tickers, autopct='%1.1f%%', startangle=140)
+    plt.pie(weights.iloc[min_stdev_idx], labels =tickers, autopct='%1.1f%%', startangle=140)
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     plt.title('Min volatility')
     plt.show()
 
-    # Save the Portfolio
-    ptf.export("Portfolio.json")
+    # # Save the Portfolio
+    # ptf.export("Portfolio.json")
 
 
 if __name__ == "__main__":

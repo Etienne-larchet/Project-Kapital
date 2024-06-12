@@ -37,18 +37,26 @@ def display_progress(prefix: str = '', sufix: str = '', ratio: Union[int, str] =
         end_type = '\n'
         gap = ''
         percentage = ''
-        _ratio = None # ratio argument must be redefine in decorator to not be local to wrapper => avoid multiple recalculation of ratio 
+        _ratio = None # ratio argument must be redefine in decorator to not be local to wrapper => avoid multiple recalculation of ratio when set up tp auto 
         if replace_text:
                 end_type = '\r'  
                 gap = '  '
 
-        def wrapper(_iteration_nb, *args, **kwargs):
+        def wrapper(*args, **kwargs):
             nonlocal call_count, end_type, gap, _ratio, percentage
+            
+            _iteration_nb = kwargs.pop('_iteration_nb', None)  # Extract _iteration_nb from kwargs
+            if _iteration_nb is None:
+                raise ValueError("The '_iteration_nb' parameter is required.")
+            
             result = func(*args, **kwargs)
             call_count += 1
 
             if not isinstance(_ratio, int):
-                _ratio = dynamic_counter(_iteration_nb)
+                if isinstance(ratio, int):
+                    _ratio = ratio
+                else:
+                    _ratio = dynamic_counter(_iteration_nb)
 
             if call_count % _ratio == 0:
                 if display_percent:
@@ -62,21 +70,14 @@ def display_progress(prefix: str = '', sufix: str = '', ratio: Union[int, str] =
             return result
         return wrapper
     
+    def dynamic_counter(total_iterations):
+        '''Choose the ratio based on the total number of iterations'''
+        ratios_list = [10, 100, 1000, 10000, 100000, 1000000, 10000000]
+        selected_ratio = ratios_list[-1] * 10
+        for ratio in ratios_list:
+            if total_iterations // ratio <= ratio:
+                selected_ratio = ratio *10
+                break
+        return selected_ratio
+    
     return decorator
-
-def dynamic_counter(total_iterations):
-    '''Choose the ratio based on the total number of iterations'''
-    ratios_list = [10, 100, 1000, 10000, 100000, 1000000, 10000000]
-    selected_ratio = ratios_list[-1] * 100
-    for ratio in ratios_list:
-        if total_iterations // ratio <= ratio:
-            selected_ratio = ratio*10
-            break
-    return selected_ratio
-
-@display_progress(ratio='auto', sufix=": Done", display_percent=True)
-def test():
-     return
-
-for i in range(34000000):
-    test(_iteration_nb=34000000)
