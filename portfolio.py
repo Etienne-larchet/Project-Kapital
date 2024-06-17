@@ -13,13 +13,21 @@ class SecuritiesList:
     positions: list[Security] = field(default_factory=list)
     stats: dict = field(default_factory=dict) # WIP
 
-    def fetch_history_many(self, start_date: str, end_date: str):
-        # Expected date format: 'YYYY-MM-DD'
-        tickers = [security.ticker for security in self.positions if security.ticker != ''] # Update to be able to select which tickers to use, default is all.
+    def fetch_history_many(self, start_date: str, end_date: str, tickers: list | None = None):
+        '''
+        Fetch historical market data for multiple tickers within a specified date range.
+
+        Parameters:
+        - start_date (str): Start date in 'YYYY-MM-DD' format.
+        - end_date (str): End date in 'YYYY-MM-DD' format.
+        - tickers (list | None): List of ticker symbols to fetch data for. If None, fetches data for all tickers in self.positions.
+        '''
+        if tickers is not None:
+            tickers = [security.ticker for security in self.positions if security.ticker != '']
         df = yf.download(tickers, start=start_date, end=end_date, group_by="ticker")
         self._handle_fetch_history(df)
     
-    def fetch_history(): # WIP
+    def fetch_history(self): # WIP
         pass
 
     def _handle_fetch_history(self, df: pd.DataFrame)-> None:
@@ -79,7 +87,7 @@ class Portfolio:
         try:
             with open(file_path, "w") as file:
                 ex = asdict(self)
-                del ex["bonds"]["security_type"], ex["stocks"]["security_type"]
+                # del ex["bonds"]["security_type"], ex["stocks"]["security_type"]
                 json.dump(ex, file, indent=4, skipkeys=True)
         except Exception as e:
             print("Error while saving:", e)

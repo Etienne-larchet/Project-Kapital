@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from time import time
 
 from portfolio import Portfolio
-from decorators import display_progress
 from Oath import ApiKeys
 
 def get_ticker(stocks_list: dict) -> dict:
@@ -116,38 +115,14 @@ def main() -> None:
         ptf_data[stock.ticker] = log_return
     
     tickers = ptf_data.keys()
-    print(tickers)
+
     stocks_log_return = pd.concat(ptf_data.values(), keys=tickers, axis=1).dropna(axis='index')
 
     # Determine the X number of randoms weights
-    print('Generating random weights')
-    a = time()
     weights = generate_randoms_proba(probas_req={'tickers':tickers}, arraysize=1000000)
-    print(time()-a)
 
-
-    # Calculate portfolio variance
-    # a = time()
-    # ptf_variances = []
-    # for _, row in weights.iterrows():
-    #     ptf_variance = np.dot(np.dot(row, stocks_log_return.cov()), row.T)
-    #     ptf_variances.append(ptf_variance)
-    # ptf_variances = np.array(ptf_variances)
-    # print('method1:', time()-a)
-
-    print('Variance calculations')
-    a = time()
-    # Convert weights DataFrame to a NumPy array for vectorized operations
-    # weights_array = weights.to_numpy()
-    # Alternatively, using dot product if einsum is not preferred
-    # ptf_variances = np.diag(np.dot(np.dot(weights, stocks_log_return.cov()), weights.T))
-    # print(ptf_variances)
+    # Calculation of standard deviation
     ptf_variances = np.sum(np.dot(weights, stocks_log_return.cov()) * weights, axis=1)
-    # print(ptf_variances)
-    print('method2:', time()-a)
-
-
-    # Calculate portfolio standard deviation
     ptf_sd = np.sqrt(ptf_variances) * np.sqrt(252)
 
     # Calculate portfolio returns
@@ -176,7 +151,6 @@ def main() -> None:
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     plt.title('Max sharpe ratio')
     plt.show()
-
 
     print("\nMax return")
     max_return_idx = globaltbl['Expected return'].idxmax()
