@@ -1,4 +1,4 @@
-from portfolio import Portfolio
+from classes.Portfolio import Portfolio
 import json
 
 

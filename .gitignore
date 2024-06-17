@@ -3,6 +3,7 @@ Oath.py
 Portfolio.json
 tickers_list.json
 test.py
+reset_ptf.py
 DB/
 .vscode/
 __pycache__/

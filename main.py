@@ -1,12 +1,12 @@
 import pandas as pd
-import requests
-import sys
+import json
 import numpy as np
 import matplotlib.pyplot as plt
-from time import time
 
-from portfolio import Portfolio
-from Oath import ApiKeys
+from classes.Portfolio import Portfolio
+from mylibs.t212 import Trading212
+from mylibs.Oath import ApiKeys
+
 
 def get_ticker(stocks_list: dict) -> dict:
     data = {
@@ -22,16 +22,6 @@ def get_ticker(stocks_list: dict) -> dict:
         df = df.reset_index(drop=True)
     data = df.to_dict(orient="records")
     return data
-
-def fetch_broker() -> dict:
-    url = "https://live.trading212.com/api/v0/equity/portfolio"
-    headers = {"Authorization": ApiKeys.t212}
-    print("Fetching portfolio positions from broker.")
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        print(f"Error: {response.status_code} while fetching data")
-        sys.exit()
-    return response.json()
 
 def define_new_tickers(ptf: Portfolio, broker_data: dict) -> list:
     ptf_tickers = [(i['t212_id'], i['ticker']) for i in ptf.stocks.positions]
@@ -56,7 +46,7 @@ def define_new_tickers(ptf: Portfolio, broker_data: dict) -> list:
 
     return update
 
-def generate_randoms_proba(probas_req: dict, arraysize=1) -> pd.DataFrame:
+def generate_randoms_proba(probas_req: dict, arraysize=1, seed: int | None = None) -> pd.DataFrame:
     """
     Generate random probability distributions given specified minimum and maximum bounds for each ticker.
 
@@ -69,8 +59,8 @@ def generate_randoms_proba(probas_req: dict, arraysize=1) -> pd.DataFrame:
     >>> result = generate_randoms_proba(probas_req, 300)
     >>> print(result)
     """
-    def _weights_calc(min_probs, max_probs, n):
-        random_values = np.random.default_rng().random(size=(arraysize, n), dtype=np.float32)
+    def _weights_calc(min_probs, max_probs, n, seed: int | None = None):
+        random_values = np.random.default_rng(seed).random(size=(arraysize, n), dtype=np.float32)
         weights = min_probs + max_probs * random_values
         weights /= weights.sum(axis=1, keepdims=True)
         return weights
@@ -86,7 +76,7 @@ def generate_randoms_proba(probas_req: dict, arraysize=1) -> pd.DataFrame:
         raise ValueError("Sum of min probabilities must be inferior to 1")
     elif sum(max_probs) < 1:
         raise ValueError("Sum of max probabilities must be superior to 1")  
-    weights = _weights_calc(min_probs=min_probs, max_probs=max_probs, n=n)
+    weights = _weights_calc(min_probs=min_probs, max_probs=max_probs, n=n, seed=seed)
     return pd.DataFrame(weights, columns=probas_req['tickers'])
 
     
@@ -96,10 +86,30 @@ def main() -> None:
     ptf.load("Portfolio.json")
 
     # Fetch broker positions
-    broker_data = fetch_broker()
+    t212 = Trading212(ApiKeys.t212)
+    positions = t212.get_positions()
+
+    with open("DB/t212/all_tickers.json", 'r') as file:
+        all_tickers = json.load(file)
+
+    for pos in positions:
+        for ticker in all_tickers:
+            t212_ticker = pos['ticker']
+            record_ticker = ticker['ticker']
+            if t212_ticker == record_ticker:
+                update = {'t212_id': t212_ticker, 'quantity': pos['quantity']}
+                ptf.stocks.update(ticker['shortName'], update, upsert=True)
+                break
+            else:
+                print('Ticker id not found in local instruments list, update in progress')
+                t212.get_instruments(update=True)
+
+
+        
+
 
     # Select new tickers and create / update stock instances within the portfolio
-    update = define_new_tickers(ptf, broker_data)
+    update = define_new_tickers(ptf, t212_data)
     for el in update:
         ptf.stocks.update(el[0], el[1], upsert=True)
 

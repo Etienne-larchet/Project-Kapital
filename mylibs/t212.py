@@ -8,13 +8,16 @@ import time
 @dataclass
 class Trading212:
     api_key: str
-    path: str = "DB/T212/"
+    root_path: str = "DB/T212/"
+    instruments_path: str = root_path + "instruments.json"
+    transactions_path: str = root_path + "transactions.json"
+    
 
-    def update_tickers_list(self):       
+    def update_instruments(self):       
         url = "https://live.trading212.com/api/v0/equity/metadata/instruments"
         data = Trading212._handle_request(url=url, api_key=self.api_key)
     
-        with open(self.path+"full_tickers_list.json", "w") as file:
+        with open(self.instruments_path, "w") as file:
             json.dump(data, file, indent=4)
         return data
        
@@ -36,14 +39,14 @@ class Trading212:
             url += t212_id
         return Trading212._handle_request(url=url, api_key=self.api_key)
     
-    def get_tickers_list(self, path: str = None, update: bool = False):
-        if path is None:
-            path = self.tickers_list_path
+    def get_instruments(self, instruments_path: str = None, update: bool = False):
+        if instruments_path is None:
+            instruments_path = self.instruments_path
         if not update:
-            return self.update_tickers_list()
+            return self.update_instruments()
         else:
             try:
-                with open(path, 'r') as file:
+                with open(instruments_path, 'r') as file:
                     data = json.load(file)
             except Exception as e:
                 print('Error while accessing file:', e)
@@ -79,7 +82,7 @@ class Trading212:
             return orders
 
         else:
-            with open(self.path+"transactions.json", "w") as file:
+            with open(self.transactions_path, "w") as file:
                 json.dump(orders, file, indent=4)
 
         
