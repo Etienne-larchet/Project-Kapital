@@ -85,31 +85,26 @@ def main() -> None:
     ptf = Portfolio()
     ptf.load("Portfolio.json")
 
-    # Fetch broker positions
     t212 = Trading212(ApiKeys.t212)
     positions = t212.get_positions()
-
-    with open("DB/t212/all_tickers.json", 'r') as file:
-        all_tickers = json.load(file)
+    instruments = t212.get_instruments()
 
     for pos in positions:
-        for ticker in all_tickers:
+        for instrument in instruments:
             t212_ticker = pos['ticker']
-            record_ticker = ticker['ticker']
+            record_ticker = instrument['ticker']
             if t212_ticker == record_ticker:
                 update = {'t212_id': t212_ticker, 'quantity': pos['quantity']}
-                ptf.stocks.update(ticker['shortName'], update, upsert=True)
+                ptf.stocks.update(instrument['shortName'], update, upsert=True)
                 break
             else:
                 print('Ticker id not found in local instruments list, update in progress')
-                t212.get_instruments(update=True)
+                t212.update_instruments()
 
-
-        
 
 
     # Select new tickers and create / update stock instances within the portfolio
-    update = define_new_tickers(ptf, t212_data)
+    update = define_new_tickers(ptf, instruments)
     for el in update:
         ptf.stocks.update(el[0], el[1], upsert=True)
 

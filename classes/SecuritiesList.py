@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from securities import Stock, Bond, Security
+from Securities import Stock, Bond, Security
 import pandas as pd
 import yfinance as yf
 

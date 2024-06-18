@@ -1,8 +1,13 @@
 import requests
 import json
 import sys
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+import inspect
+import logging
+from typing import List, Dict, Any
+
+from Oath import ApiKeys
 
 
 @dataclass
@@ -11,17 +16,8 @@ class Trading212:
     root_path: str = "DB/T212/"
     instruments_path: str = root_path + "instruments.json"
     transactions_path: str = root_path + "transactions.json"
-    
-
-    def update_instruments(self):       
-        url = "https://live.trading212.com/api/v0/equity/metadata/instruments"
-        data = Trading212._handle_request(url=url, api_key=self.api_key)
-    
-        with open(self.instruments_path, "w") as file:
-            json.dump(data, file, indent=4)
-        return data
        
-    def get_orders(self, id: str | None = None):
+    def get_orders(self, id: str | None = None) -> json:
         '''
         Fetch orders from the Trading212 API.
 
@@ -33,16 +29,16 @@ class Trading212:
             url += id
         return Trading212._handle_request(url=url, api_key=self.api_key)
 
-    def get_positions(self, t212_id: str | None = None):
+    def get_positions(self, t212_id: str | None = None) -> json:
         url = "https://live.trading212.com/api/v0/equity/portfolio/"
         if t212_id is not None:
             url += t212_id
         return Trading212._handle_request(url=url, api_key=self.api_key)
     
-    def get_instruments(self, instruments_path: str = None, update: bool = False):
+    def get_instruments(self, instruments_path: str = None, update: bool = False) -> json:
         if instruments_path is None:
             instruments_path = self.instruments_path
-        if not update:
+        if update:
             return self.update_instruments()
         else:
             try:
@@ -52,7 +48,84 @@ class Trading212:
                 print('Error while accessing file:', e)
             return data
         
-    def get_transactions(self, update: bool = False):
+    def search_instruments(self, filter: Dict[str, str | List[str]], update: bool = True) -> List[Dict[str, Any]]:
+        """
+        Search for instruments based on a filter.
+
+        Args:
+            filter (dict): The filter to apply. For example:
+                {'t212_id': 'AAPL_US_EQ'},
+                {'ticker': 'AAPL'},
+                {'ticker': ['AAPL', 'MSFT', 'TSLA']}
+            update (bool): Whether to update instruments if a value is not found. Defaults to True.
+        """       
+        search_key = next(iter(filter))
+        search_values = filter[search_key]
+        
+        if not isinstance(search_values, list):
+            search_values = [search_values]
+        
+        return_data = []
+        instruments_list = self.get_instruments()
+        
+        for value in search_values:
+            found = False
+            for instrument in instruments_list:
+                if instrument.get(search_key) == value:
+                    return_data.append(instrument)
+                    found = True
+                    break
+            
+            if not found:
+                if not update:
+                    logging.warning(f'{value} does not exist.')
+                else:           
+                    logging.info(f'{value} not found, updating instruments table.')
+                    instruments_list = self.update_instruments()
+                    update = False  # Avoid multiple updates in a single search
+                    
+                    result = self.search_instruments({search_key: value}, update=update)
+                    if result:
+                        return_data.extend(result)
+            
+        return return_data
+        
+    def search_instruments2(self, filter: dict, update: bool = True) -> list:
+        '''
+        filter = {'t212_id': 'AAPL_US_EQ'}
+        filter = {'ticker': 'AAPL'}
+        filter = {'ticker': ['AAPL', 'MSFT', 'TSLA']}      
+        '''
+        search_key = list(filter.keys())
+        if len(search_key) > 1:
+            print('Error on filter, multi-filters not supported') # progess to do
+            sys.exit()
+        search_key = search_key[0]
+        search_values = filter[search_key]
+        if not isinstance(search_values, list):
+            search_values = [search_values]
+        return_data = []
+        instruments_list = self.get_instruments()
+        for value in search_values:
+            success = 0
+            for instrument in instruments_list:
+                if instrument[search_key] == value:
+                    return_data.append(instrument)
+                    success = 1
+                    break
+            if success != 1:
+                if update == False:
+                    print(f'{value} do not exist.')
+                    continue
+                print(f'{value} not found, update of instruments table in progress.')
+                instruments_list = self.update_instruments()
+                update = False
+                data = self.search_instruments(filter={search_key: value}, update=update)
+                if data != []:
+                    return_data.append(data)   
+        return return_data
+        
+    def get_transactions(self, update: bool = False) -> list:
         base1 = "https://live.trading212.com/"
         base2 = "api/v0/equity/history/orders"
         query = {
@@ -68,31 +141,50 @@ class Trading212:
             page_nb += 1
             if base2 is None:
                 break
-
         print('Nb transactions:', len(orders))
-
         a = time.time()
         for order in orders:
                 keys_to_remove = [key for key, value in order.items() if value is None]
                 for key in keys_to_remove:
                     del order[key]
         print("Fitering time:", time.time()-a)
-
         if not update:
             return orders
-
         else:
             with open(self.transactions_path, "w") as file:
                 json.dump(orders, file, indent=4)
-
         
-    def get_account_stats(self):
+    def get_account_stats(self) ->json:
         url = "https://live.trading212.com/api/v0/equity/account/cash"
         return Trading212._handle_request(url, self.api_key)
 
+    def update_instruments(self) -> json:       
+        url = "https://live.trading212.com/api/v0/equity/metadata/instruments"
+        data = Trading212._handle_request(url=url, api_key=self.api_key)
+
+        # change of semantic to avoid any confusion
+        for instrument in data:
+            instrument['t212_id'] = instrument.pop('ticker')
+            instrument['ticker'] = instrument.pop('shortName')
+
+        with open(self.instruments_path, "w") as file:
+            json.dump(data, file, indent=4)
+        return data
+    
+    def search(self, data: list, compare_el: str,  method, method_args: list = None, update: bool = False):
+        for el in data:
+            if el.get(compare_el, None) is None:
+                print('Key not found')
+            results = method(update=update, **method_args)
+            for result in results:
+                if result.get(compare_el, None) is None:
+                    print('key not found in method return')
+                    if update is True:
+                        params = inspect.signature(method).parameters # check if given function received 'update'params
+                        # if 'update' in params:
            
     @staticmethod
-    def _handle_request(url: str, api_key: str, headers: dict = None, params: dict = None):
+    def _handle_request(url: str, api_key: str, headers: dict = None, params: dict = None) -> json:
         full_headers = {"Authorization": api_key}
         if headers is not None:
             full_headers.update(headers)
@@ -107,3 +199,8 @@ class Trading212:
             case _:
                 print(f"Error: {response.status_code} while fetching data")
                 sys.exit()
+
+
+logging.basicConfig(level=logging.INFO)
+t212 = Trading212(ApiKeys.t212)
+t212.search_instruments(filter={'ticker':['AAPL', 'MSFF']})

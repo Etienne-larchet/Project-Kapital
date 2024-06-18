@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field, asdict
-from classes.Securities import Stock, Bond
+from Securities import Stock, Bond
 import json
 import sys
 from typing import Literal
-from classes.SecuritiesList import SecuritiesList
+from SecuritiesList import SecuritiesList
 
 
 @dataclass

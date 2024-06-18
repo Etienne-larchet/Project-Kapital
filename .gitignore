@@ -1,9 +1,8 @@
 Oath.py
-.venv/
 Portfolio.json
 tickers_list.json
 test.py
-reset_ptf.py
 DB/
+.venv/
 .vscode/
 __pycache__/
