@@ -6,15 +6,14 @@ from dataclasses import dataclass
 import inspect
 import logging
 from typing import List, Dict, Any
-
-from Oath import ApiKeys
+import os
 
 
 @dataclass
 class Trading212:
-    api_key: str
-    root_path: str = "DB/T212/"
-    instruments_path: str = root_path + "instruments.json"
+    api_key: str # Further improvement to accept a cryptographic key/file
+    root_path: str = "DB-T212/"
+    instruments_path: str = os.path.join(root_path, "instruments.json")
     transactions_path: str = root_path + "transactions.json"
        
     def get_orders(self, id: str | None = None) -> json:
@@ -88,41 +87,6 @@ class Trading212:
                     if result:
                         return_data.extend(result)
             
-        return return_data
-        
-    def search_instruments2(self, filter: dict, update: bool = True) -> list:
-        '''
-        filter = {'t212_id': 'AAPL_US_EQ'}
-        filter = {'ticker': 'AAPL'}
-        filter = {'ticker': ['AAPL', 'MSFT', 'TSLA']}      
-        '''
-        search_key = list(filter.keys())
-        if len(search_key) > 1:
-            print('Error on filter, multi-filters not supported') # progess to do
-            sys.exit()
-        search_key = search_key[0]
-        search_values = filter[search_key]
-        if not isinstance(search_values, list):
-            search_values = [search_values]
-        return_data = []
-        instruments_list = self.get_instruments()
-        for value in search_values:
-            success = 0
-            for instrument in instruments_list:
-                if instrument[search_key] == value:
-                    return_data.append(instrument)
-                    success = 1
-                    break
-            if success != 1:
-                if update == False:
-                    print(f'{value} do not exist.')
-                    continue
-                print(f'{value} not found, update of instruments table in progress.')
-                instruments_list = self.update_instruments()
-                update = False
-                data = self.search_instruments(filter={search_key: value}, update=update)
-                if data != []:
-                    return_data.append(data)   
         return return_data
         
     def get_transactions(self, update: bool = False) -> list:
@@ -201,6 +165,7 @@ class Trading212:
                 sys.exit()
 
 
-logging.basicConfig(level=logging.INFO)
-t212 = Trading212(ApiKeys.t212)
-t212.search_instruments(filter={'ticker':['AAPL', 'MSFF']})
+
+t212 = Trading212("32")
+a = t212.transactions_path
+print(a)
