@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from classes.Portfolio import Portfolio
-from classes.Finance import Fmaths
-from mylibs.t212 import Trading212
+from Portfolio import Portfolio
+from Finance import Fmaths
+from t212 import Trading212
 from Oath import ApiKeys
 
 
@@ -53,9 +53,11 @@ def main() -> None:
 
     t212 = Trading212(ApiKeys.t212, root_path="DB/T212/")
     positions = t212.get_positions()
-    instruments = t212.get_instruments()
+    # instruments = t212.get_instruments()
+    positions_id = [pos['ticker']]
 
     for pos in positions:
+        t212.search_instruments()
         for instrument in instruments:
             t212_ticker = pos['ticker']
             record_ticker = instrument['ticker']

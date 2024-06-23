@@ -6,15 +6,15 @@ from dataclasses import dataclass
 import inspect
 import logging
 from typing import List, Dict, Any
-import os
+from os.path import join
 
 
 @dataclass
 class Trading212:
     api_key: str # Further improvement to accept a cryptographic key/file
     root_path: str = "DB-T212/"
-    instruments_path: str = os.path.join(root_path, "instruments.json")
-    transactions_path: str = root_path + "transactions.json"
+    instruments_path: str = join(root_path, "instruments.json")
+    transactions_path: str = join(root_path, "transactions.json")
        
     def get_orders(self, id: str | None = None) -> json:
         '''
@@ -23,16 +23,18 @@ class Trading212:
         **Parameters**
         id (str | None): Specific order ID to fetch. Fetches all orders if None.
         '''
-        url = 'https://live.trading212.com/api/v0/equity/orders/'
+        url = 'https://live.trading212.com/api/v0/equity/orders'
         if id is not None:
-            url += id
+            url += "/" + id
         return Trading212._handle_request(url=url, api_key=self.api_key)
 
     def get_positions(self, t212_id: str | None = None) -> json:
-        url = "https://live.trading212.com/api/v0/equity/portfolio/"
+        url = "https://live.trading212.com/api/v0/equity/portfolio"
         if t212_id is not None:
-            url += t212_id
-        return Trading212._handle_request(url=url, api_key=self.api_key)
+            url += "/" + t212_id
+        data = Trading212._handle_request(url=url, api_key=self.api_key)
+        data = Trading212._change_semantic(data)
+        return data
     
     def get_instruments(self, instruments_path: str = None, update: bool = False) -> json:
         if instruments_path is None:
@@ -127,15 +129,13 @@ class Trading212:
         data = Trading212._handle_request(url=url, api_key=self.api_key)
 
         # change of semantic to avoid any confusion
-        for instrument in data:
-            instrument['t212_id'] = instrument.pop('ticker')
-            instrument['ticker'] = instrument.pop('shortName')
+        data = Trading212._change_semantic(data)
 
         with open(self.instruments_path, "w") as file:
             json.dump(data, file, indent=4)
         return data
     
-    def search(self, data: list, compare_el: str,  method, method_args: list = None, update: bool = False):
+    def search(self, data: list, compare_el: str,  method, method_args: list = None, update: bool = False): #WIP
         for el in data:
             if el.get(compare_el, None) is None:
                 print('Key not found')
@@ -161,11 +161,18 @@ class Trading212:
                 new = Trading212._handle_request(url=url, api_key=api_key, headers=headers, params=params)
                 return new
             case _:
-                print(f"Error: {response.status_code} while fetching data")
+                logging.error(f"Error: {response.status_code} while fetching data")
                 sys.exit()
-
-
-
-t212 = Trading212("32")
-a = t212.transactions_path
-print(a)
+    
+    @staticmethod
+    def _change_semantic(data: list) -> list: # Changement of semantic to avoid confusion in later operations
+        for el in data:
+            try:
+                el['t212_id'] = el.pop('ticker')
+                el['ticker'] = el.pop('shortName')
+            except KeyError as e:
+                logging.info(f"Fail to get key {e} for object {el.get("t212_id", el.get("ticker", None))}")
+                continue
+            except Exception as e:
+                logging.error(e)
+        return data
