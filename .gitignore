@@ -4,3 +4,4 @@ DB/
 .venv/
 .vscode/
 __pycache__/
+*.pptx
