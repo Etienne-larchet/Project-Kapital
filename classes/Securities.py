@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-
+from inspect import signature
 
 @dataclass(kw_only=True)
 class Security:
@@ -12,7 +12,7 @@ class Security:
     def __getitem__(self, key):
         return getattr(self, key)
     
-    def __setitem__(self, key, value) -> None:
+    def __setitem__(self, key, value):
         setattr(self, key, value)
 
 
@@ -24,7 +24,8 @@ class Stock(Security):
     t212_id: str | None = None
 
     def __init__(self, ticker: str, sector: str | None = None, country: str | None = None, t212_id: str | None = None, **kwargs):
-        super().__init__(**kwargs)
+        valid_args = signature(super().__init__).parameters.keys()
+        super().__init__(**{k: v for k, v in kwargs.items() if k in valid_args})
         self.ticker = ticker
         self.sector = sector
         self.country = country

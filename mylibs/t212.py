@@ -2,8 +2,8 @@ import requests
 import json
 import sys
 import time
-from dataclasses import dataclass
-import inspect
+from dataclasses import dataclass, field
+# import inspect
 import logging
 from typing import List, Dict, Any
 from os.path import join
@@ -12,9 +12,13 @@ from os.path import join
 @dataclass
 class Trading212:
     api_key: str # Further improvement to accept a cryptographic key/file
-    root_path: str = "DB-T212/"
-    instruments_path: str = join(root_path, "instruments.json")
-    transactions_path: str = join(root_path, "transactions.json")
+    root_path: str = field(default="DB-T212/")
+    instruments_path: str = field(init=False)
+    transactions_path: str = field(init=False)
+    
+    def __post_init__(self):
+        self.instruments_path = join(self.root_path, "instruments.json")
+        self.transactions_path = join(self.root_path, "transactions.json")
        
     def get_orders(self, id: str | None = None) -> json:
         '''
@@ -45,9 +49,9 @@ class Trading212:
             try:
                 with open(instruments_path, 'r') as file:
                     data = json.load(file)
+                    return data
             except Exception as e:
-                print('Error while accessing file:', e)
-            return data
+                logging.error(f'Error while accessing file: {e}')
         
     def search_instruments(self, filter: Dict[str, str | List[str]], update: bool = True) -> List[Dict[str, Any]]:
         """
@@ -103,17 +107,17 @@ class Trading212:
             data = Trading212._handle_request(url=base1+base2, api_key=self.api_key, params=query)
             base2 = data['nextPagePath']
             orders += data['items']
-            print('Page', page_nb)
+            logging.info(f'Page {page_nb}')
             page_nb += 1
             if base2 is None:
                 break
-        print('Nb transactions:', len(orders))
+        logging.info(f'Nb transactions: {len(orders)}')
         a = time.time()
         for order in orders:
                 keys_to_remove = [key for key, value in order.items() if value is None]
                 for key in keys_to_remove:
                     del order[key]
-        print("Fitering time:", time.time()-a)
+        logging.debug(f"Fitering time: {time.time()-a}")
         if not update:
             return orders
         else:
@@ -135,17 +139,17 @@ class Trading212:
             json.dump(data, file, indent=4)
         return data
     
-    def search(self, data: list, compare_el: str,  method, method_args: list = None, update: bool = False): #WIP
-        for el in data:
-            if el.get(compare_el, None) is None:
-                print('Key not found')
-            results = method(update=update, **method_args)
-            for result in results:
-                if result.get(compare_el, None) is None:
-                    print('key not found in method return')
-                    if update is True:
-                        params = inspect.signature(method).parameters # check if given function received 'update'params
-                        # if 'update' in params:
+    # def search(self, data: list, compare_el: str,  method, method_args: list = None, update: bool = False): #WIP
+    #     for el in data:
+    #         if el.get(compare_el, None) is None:
+    #             print('Key not found')
+    #         results = method(update=update, **method_args)
+    #         for result in results:
+    #             if result.get(compare_el, None) is None:
+    #                 print('key not found in method return')
+    #                 if update is True:
+    #                     params = inspect.signature(method).parameters # check if given function received 'update'params
+    #                     # if 'update' in params:
            
     @staticmethod
     def _handle_request(url: str, api_key: str, headers: dict = None, params: dict = None) -> json:
