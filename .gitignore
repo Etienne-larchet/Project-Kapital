@@ -5,3 +5,6 @@ DB/
 .vscode/
 __pycache__/
 *.pptx
+mylibs/decorators.py
+classes/securitiesList.py
+main.py

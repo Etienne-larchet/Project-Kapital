@@ -1,50 +1,48 @@
-from dataclasses import dataclass, field, asdict
-from Securities import Stock, Bond
-import json
-import sys
-from typing import Literal
-from SecuritiesList import SecuritiesList
+import logging
+from bson.objectid import ObjectId
+from typing import Union, TYPE_CHECKING
+
+from securities import Stock, Bond, Order
+from generals import GeneralMethods
+
+if TYPE_CHECKING:
+    from pymongo import MongoClient
 
 
-@dataclass
-class Portfolio:
-    stocks: SecuritiesList = field(default_factory=lambda: SecuritiesList(Stock))
-    bonds: SecuritiesList = field(default_factory=lambda: SecuritiesList(Bond))
-    stats: dict = field(default_factory=dict)
-    
-    def add_security(self, type: Literal['stock', 'bond'], ticker: str, **kwargs) -> None:
-        match type:
-            case "stock": 
-                    self.stocks.positions.append(Stock(ticker, **kwargs))
-            case "bond":
-                pass # Use for bonds, WIP
+class Portfolio(GeneralMethods):
+    def __init__(self, mongo_client: 'MongoClient | None' = None, ptf_id: str | None = None):
+        self._mongo_client = mongo_client
+        self._id = ObjectId(ptf_id)
+        self.stocks = {}
+        self.bonds = {}
+        self.brokersLastUpdate = {}
+   
+    def load(self, ptf_id: str | ObjectId | None = None):
+        if ptf_id:
+            self._id = ObjectId(ptf_id)
+        ptf = self._mongo_client.investissements.portfolios.find_one({'_id': self._id})
+        if ptf:
+            self.from_dict(self, ptf, classes=[Portfolio, Stock, Bond, Order])
+        else:
+            logging.info(f"No portfolio found with id '{self._id}'")
 
-    def export(self, file_path: str)-> None:
-        try:
-            with open(file_path, "w") as file:
-                ex = asdict(self)
-                json.dump(ex, file, indent=4, skipkeys=True)
-        except Exception as e:
-            print("Error while saving:", e)
-            print('data:', file)
-            sys.exit()
-    
-    def load(self, file_path: str) -> int:
-        try:
-            with open(file_path, "r") as file:
-                data = json.load(file)
-        except FileNotFoundError:
-            print(f"File not found at path: {file_path}")
-            return 0
-        except Exception as e:
-            print(f'Error: {e}')
-            sys.exit()
-        for attr, value in data.items():
-            match attr:
-                case "bonds":
-                    self.bonds.from_dict(value)
-                case "stocks":
-                     self.stocks.from_dict(value)
-                case "stats":
-                    self.stats = value
-        return 1
+    def add(self, security: Union[Bond, Stock]) -> Union[Bond, Stock]:
+        security._mongo_client = self._mongo_client
+        security._ptf_id = self._id
+        security_type = self.class_to_cat(security)
+        getattr(self, security_type)[security.isin] = security
+
+        if self._mongo_client:
+            security_dict = security.to_dict()
+            self._mongo_client.investissements.portfolios.find_one_and_update(
+                filter= {'_id': self._id},
+                update= {'$set': {f'{security_type}.{security.isin}': security_dict}}, 
+                upsert= True)
+        logging.debug(f"Security '{security.ticker}' ({security.isin}) added to portfolio")
+        return getattr(self, security_type)[security.isin]
+
+    def import_json(self, path: str): # WIP
+        pass
+
+    def export_json(self, path: str): # WIP
+        pass
