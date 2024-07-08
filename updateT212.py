@@ -29,7 +29,7 @@ if not user.ptf_ids:
 t = time()
 ptf.load()
 logging.info(f"Portfolio loading time: {time() - t}")
-t212 = Trading212(ApiKeys.t212, mongo_client)
+t212 = Trading212(user.oaths['T212'], mongo_client)
 
 # Getting orders from a specific date
 last_date = ptf.brokersLastUpdate.get('T212', None)
