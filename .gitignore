@@ -1,10 +1,4 @@
-Oath.py
-test.py
-DB/
 .venv/
 .vscode/
 __pycache__/
-*.pptx
-mylibs/decorators.py
-classes/securitiesList.py
-main.py
+Secrets.py

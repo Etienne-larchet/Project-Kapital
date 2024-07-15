@@ -1,15 +1,13 @@
-import config
-
 import logging
 from datetime import datetime, timezone
 from time import time
 from pymongo import MongoClient
 
-from t212 import Trading212
-from Oath import ApiKeys
-from securities import Order, Stock
-from portfolio import Portfolio
-from users import User
+from mylibs.t212 import Trading212
+from master.Secrets import ApiKeys
+from classes.securities import Order, Stock
+from classes.portfolio import Portfolio
+from classes.users import User
 
 logging.basicConfig(level=logging.INFO)
 

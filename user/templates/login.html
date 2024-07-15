@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            width: 300px;
+            text-align: center;
+        }
+        .login-container h2 {
+            margin-bottom: 20px;
+        }
+        .login-container input[type="email"],
+        .login-container input[type="password"] {
+            width: calc(100% - 22px); /* Adjust for padding and border */
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .login-container input[type="submit"] {
+            width: 100%;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: medium;
+        }
+        .login-container input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        .error-message {
+            color: red;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .success-message {
+            color: green;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+    <script>
+        async function handleSubmit(event) {
+            event.preventDefault(); // Prevent the default form submission
+            const email = document.forms["loginForm"]["email"].value;
+            const password = document.forms["loginForm"]["password"].value;
+            const statusMessage = document.getElementById("status-message");
+            const new_user = document.querySelector('input[type="submit"]').getAttribute('data-value')
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/login/connect/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password, new_user })
+                });
+                console.log(response)
+                const data = await response.json();
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url
+                } else {
+                    // Handle HTTP errors
+                    statusMessage.className = "error-message";
+                    statusMessage.textContent = data.error || "An error occurred during login.";
+                }
+            } catch (error) {
+                statusMessage.className = "error-message";
+                statusMessage.textContent = error;
+            }
+        }
+
+        function switchText() {
+            const submitButton = document.querySelector('input[type="submit"]');
+            const createAccountLink = document.getElementById('create-account-link');
+            const title = document.getElementById('title');
+            const tempText = submitButton.value;
+            const isActive = submitButton.getAttribute('data-value') === 'true'
+
+            submitButton.value = createAccountLink.textContent;
+            submitButton.setAttribute('data-value', !isActive)
+            createAccountLink.textContent = tempText;
+            title.textContent = submitButton.value
+        }
+    </script>
+</head>
+<body>
+    <div class="login-container">
+        <h2 id="title">Login</h2>
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <a style="color: red; font-size:x-small;" {%if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form name="loginForm" onsubmit="handleSubmit(event)">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="submit" value="Login" data-value='false'>
+            <div id="status-message"></div>
+            <a id="create-account-link" style="font-size:smaller; font: 1em sans-serif;" href="javascript:void(0)" onclick="switchText()">Create an account</a>
+        </form>
+    </div>
+</body>
+</html>
