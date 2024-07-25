@@ -2,7 +2,7 @@ import logging
 import bcrypt
 import secrets
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, TYPE_CHECKING
+from typing import List, Dict, Optional, Union, TYPE_CHECKING
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
@@ -17,7 +17,7 @@ class UserError(Exception):
 
 
 class User(GeneralMethods):
-    def __init__(self, id: Optional[str] = None, email: Optional[str] = None, 
+    def __init__(self, id: Optional[Union[str, ObjectId]] = None, email: Optional[str] = None, 
                  password: Optional[str] = None, mongo_client: Optional['MongoClient'] = None):
         self._id = ObjectId(id)
         self.email = email
@@ -48,8 +48,8 @@ class User(GeneralMethods):
         self._isAuthentificated = True
         
         
-    def add_ptf_id(self, ptf_id: str):
-        self.ptf_ids.append(ptf_id)
+    def add_ptf_id(self, ptf_id: Union[str, ObjectId]):
+        self.ptf_ids.append(ObjectId(ptf_id))
         if self._isAuthentificated or self._verify_user():
             self._users_db.users.find_one_and_update({'_id': self._id}, {'$push': {'ptf_ids': ptf_id}})
         else:

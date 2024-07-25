@@ -1,26 +1,35 @@
 import logging
 from typing import Type, Dict, Any, List
+import ipdb
 
 
 class GeneralMethods():
-    def to_dict(self):
+    def to_dict(self, obj = None):
             # https://stackoverflow.com/questions/7963762/what-is-the-most-economical-way-to-convert-nested-python-objects-to-dictionaries
-            def my_dict(obj):
-                if not hasattr(obj,"__dict__"):
+        def my_dict(obj):
+            if not hasattr(obj, "__dict__"):
+                if isinstance(obj, dict):
+                    result = {}
+                    for key, val in obj.items():
+                        result[key] = my_dict(val)
+                    return result
+                elif isinstance(obj, list):
+                    return [my_dict(item) for item in obj]
+                else:
                     return obj
-                result = {}
-                for key, val in obj.__dict__.items():
-                    if key.startswith("_"):
-                        continue
-                    element = []
-                    if isinstance(val, list):
-                        for item in val:
-                            element.append(my_dict(item))
-                    else:
-                        element = my_dict(val)
-                    result[key] = element
-                return result
-            return my_dict(self)
+            
+            result = {}
+            for key, val in obj.__dict__.items():
+                if key.startswith("_"):
+                    continue
+                if isinstance(val, dict):
+                    result[key] = {k: my_dict(v) for k, v in val.items()}
+                elif isinstance(val, list):
+                    result[key] = [my_dict(item) for item in val]
+                else:
+                    result[key] = my_dict(val)
+            return result
+        return my_dict(self if obj is None else obj)
  
     @staticmethod
     def from_dict(cls: Type, dict_obj: Dict[str, Any], classes: List[Type] = []) -> Any:
@@ -49,6 +58,7 @@ class GeneralMethods():
                     for el in value:
                         if class_name in classes_dict:
                             sub_cls = classes_dict[class_name]
+                            # ipdb.set_trace() # temp
                             sub_instance = my_instance(sub_cls, el)
                             getattr(instance, key).append(sub_instance)
                         else:

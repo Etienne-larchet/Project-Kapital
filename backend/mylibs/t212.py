@@ -4,19 +4,25 @@ import sys
 import time
 import logging
 from dataclasses import dataclass
-from typing import Union, Dict, List, Any, TYPE_CHECKING
+from typing import Union, Dict, List, Any, Optional, TYPE_CHECKING
 from datetime import datetime
+import datetime as dt
+
+from mylibs.decorators import timing
 
 if TYPE_CHECKING:
     from pymongo import MongoClient
 
 
+logger = logging.getLogger("myapp")
+
+
 @dataclass()
 class Trading212:
     t212_key: str
-    mongo_client: 'MongoClient | None' = None
+    mongo_client: 'Optional[MongoClient]' = None
        
-    def get_positions(self, t212_id: str | None = None) -> json:
+    def get_positions(self, t212_id: Optional[str] = None) -> json:
         url = "https://live.trading212.com/api/v0/equity/portfolio"
         if t212_id is not None:
             url += "/" + t212_id
@@ -24,6 +30,7 @@ class Trading212:
         data = Trading212._change_semantic(data)
         return data
 
+    @timing()
     def get_instruments(self, filter: Dict[str, Union[str, List[str]]], update: bool = False) -> List[Dict[str, Any]]:
         """
         Search for instruments based on a filter.
@@ -56,7 +63,7 @@ class Trading212:
                 missing_values.append(value)
         if missing_values:
             if update:
-                logging.info(f'Values {missing_values} not found, updating instruments table.')
+                logger.info(f'Values {missing_values} not found, updating instruments table.')
                 self.update_instruments()
                 for value in missing_values:
                     result = self.get_instruments({search_key: value}, update=False)
@@ -64,45 +71,50 @@ class Trading212:
                         return_data.extend(result)
             else:
                 for value in missing_values:
-                    logging.warning(f'{value} does not exist.')
+                    logger.warning(f'{value} does not exist.')
 
         return return_data    
-        
-    def get_orders(self, from_date: datetime | None = None, chunk_size: int = 50) -> list:
-        base1 = "https://live.trading212.com/"
-        base2 = "api/v0/equity/history/orders"
+
+    @timing()
+    def get_orders(self, from_date: Optional[datetime] = None, chunk_size: int = 50, filter_func: Optional[callable] = None) -> list:
+        url = "https://live.trading212.com/api/v0/equity/history/orders"
         query = {
         "limit": chunk_size,
+        "cursor": None,
         }
         page_nb = 0
         orders = []
         looper = True
 
+        logger.info(f'Starting get_orders with params from_date: {from_date}; chunk_size: {chunk_size}; filter_func: {filter_func}')
         while looper:
-            data = Trading212._handle_request(url=base1+base2, api_key=self.t212_key, params=query)
-            base2 = data['nextPagePath']
+            data = Trading212._handle_request(url=url, api_key=self.t212_key, params=query, delay_btw_calls=4)
             items = data['items']
-            orders += items
+            if not items:
+                break
+        
             page_nb += 1
-            logging.info(f'Page {page_nb}')
-            
-            if from_date:
-                for order in items[::-1]: # Issues in latter operations may arise for none-executed orders that may be modified
+            next_cursor_dt = datetime.strptime(items[-1]['dateModified'], '%Y-%m-%dT%H:%M:%S.%fZ')
+            next_cursor_ts = int(next_cursor_dt.timestamp()*1000)
+            query['cursor'] = next_cursor_ts
+            logger.info(f"Page {page_nb:03} - Next cursor at: {next_cursor_ts} - {datetime.fromtimestamp(next_cursor_ts/1000, dt.UTC).strftime('%Y-%m-%dT%H:%M:%S.%fZ')}")
+
+            for order in items: # Issues in later operations may arise for none-executed orders that may be modified
+                if from_date:
                     date = datetime.strptime(order['dateCreated'], '%Y-%m-%dT%H:%M:%S.%fZ')
                     if date < from_date:
-                        del orders[-1]
                         looper = False
-                    else:
-                        break
+                        continue
+                if filter_func and not filter_func(order):
+                    continue
+                orders.append(order)
 
-            if base2 is None:
-                break
 
         orders = self._change_semantic(orders)
-        logging.info(f'Nb transactions fetched: {len(orders)}')
+        logger.info(f'Nb transactions fetched: {len(orders)}')
         return orders
     
-    def get_open_orders(self, id: str | None = None) -> json:
+    def get_open_orders(self, id: Optional[str] = None) -> json:
         '''
         Fetch orders from the Trading212 API.
 
@@ -126,7 +138,7 @@ class Trading212:
         instruments = Trading212._change_semantic(data)
 
         if self.mongo_client is None:
-            logging.info('Mongo client not connected, update not saved')
+            logger.info('Mongo client not connected, update not saved')
             return instruments
         
         # init mongo client
@@ -139,9 +151,9 @@ class Trading212:
         if new_ins:
             instruments_pt.insert_many(new_ins)
         return new_ins
-           
+    
     @staticmethod
-    def _handle_request(url: str, api_key: str, headers: dict = None, params: dict = None) -> json:
+    def _handle_request(url: str, api_key: str, headers: Optional[dict] = None, params: Optional[dict] = None, delay_btw_calls: float = 2) -> json:
         full_headers = {"Authorization": api_key}
         if headers is not None:
             full_headers.update(headers)
@@ -150,11 +162,11 @@ class Trading212:
             case 200:
                 return response.json()
             case 429:
-                time.sleep(1.5)
+                time.sleep(delay_btw_calls)
                 new = Trading212._handle_request(url=url, api_key=api_key, headers=headers, params=params)
                 return new
             case _:
-                logging.error(f"Error: {response.status_code} while fetching data")
+                logger.error(f"Error: {response.status_code} while fetching data")
                 sys.exit()
     
     @staticmethod
@@ -168,8 +180,8 @@ class Trading212:
                 del el['maxOpenQuantity']
                 del el['addedOn']
             except KeyError as e:
-                logging.debug(f"Fail to get key {e} for object {el.get("t212_id", el.get("ticker", None))}")
+                logger.debug(f"Fail to get key {e} for object {el.get("t212_id", el.get("ticker", None))}")
                 continue
             except Exception as e:
-                logging.error(e)
+                logger.error(e)
         return data

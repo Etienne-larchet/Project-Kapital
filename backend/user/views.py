@@ -4,8 +4,10 @@ from rest_framework import status
 from django.views.generic import TemplateView
 from .serializers import ConnectionSerializer
 from classes.users import User, UserError
-from master.mongodb import mongo_client
+from master.mongoDB import mongo_client
 from django.http import JsonResponse
+
+import ipdb
 
 class Index(TemplateView):
     template_name = 'login.html'
@@ -13,6 +15,7 @@ class Index(TemplateView):
 
 @api_view(['POST'])
 def connection(request):
+    # ipdb.set_trace()
     serializer = ConnectionSerializer(data=request.data)
     if serializer.is_valid():
         data = serializer.validated_data

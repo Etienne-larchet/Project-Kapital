@@ -1,7 +1,7 @@
 import logging
 from django.shortcuts import redirect
 from django.urls import reverse
-from master.mongodb import mongo_client
+from master.mongoDB import mongo_client
 from datetime import datetime
 from typing import TYPE_CHECKING
 from django.utils.deprecation import MiddlewareMixin
@@ -9,9 +9,15 @@ from classes.users import User
 from django.contrib import messages
 from bson import ObjectId
 from urllib.parse import urlencode
+from django.urls import get_resolver
+
+import ipdb
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+
+
+logger = logging.getLogger('myapp')
 
 
 def save_request(request: 'HttpRequest') -> None:
@@ -20,8 +26,22 @@ def save_request(request: 'HttpRequest') -> None:
         query_params = request.GET.dict()
         original_request = f'{base_url}?{urlencode(query_params)}'
     else:
-        logging.warning(f"Method '{request.method}' not supported in redirection")
+        logger.warning(f"Method '{request.method}' not supported in redirection")
     request.session['original_request'] = original_request
+
+def endpoints(urllist, depth=0) ->list:
+    '''https://gist.github.com/ashishtajane/6531000f8c830717fe62
+
+    usage:
+    endpoints_list = endpoints(get_resolver().url_patterns)
+    
+    '''
+    paths = []
+    for entry in urllist:
+        paths.append(entry.pattern)
+        if hasattr(entry, 'url_patterns'):
+            endpoints(entry.url_patterns, depth + 1)
+    return paths
 
 
 class AuthRequiredMiddleware(MiddlewareMixin):
@@ -40,17 +60,20 @@ class AuthRequiredMiddleware(MiddlewareMixin):
                 if expiration >= datetime.now() and identification['_id'] == ObjectId(client_id):
                     is_authenticated = True
                 else:
-                    logging.warning(f"Token expired for user {client_id}. Redirecting to login.")
+                    logger.warning(f"Token expired for user {client_id}. Redirecting to login.")
                     messages.error(request, "Your session has expired. Please log in again.")
             else:
-                logging.warning("Token not found in database. Redirecting to login.")
+                logger.warning("Token not found in database. Redirecting to login.")
                 messages.error(request, "Invalid token. Please log in again.")
         else:
-            logging.warning("No token found in request. Redirecting to login.")
+            logger.warning("No token found in request. Redirecting to login.")
             messages.error(request, "You are not logged in. Please log in to continue.")
             
         if not is_authenticated:
-            save_request(request)
+            endpoints_list = endpoints(get_resolver().url_patterns) # WIP: move this verification to the top and redirect to home if not request.path not in endpoints_list
+            # ipdb.set_trace()
+            if request.path in endpoints_list:
+                save_request(request)
             return redirect(reverse('user:index'))  # Redirect unauthenticated users
 
     def process_response(self, request: 'HttpRequest', response: 'HttpResponse'):

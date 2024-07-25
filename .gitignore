@@ -3,7 +3,9 @@
 .vscode/
 __pycache__/
 Secrets.py
-
+debug.log
+Pipfile.lock
+test.py
 
 #FRONTEND
 # Logs
@@ -36,3 +38,5 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+package-lock.json
