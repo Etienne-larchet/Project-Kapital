@@ -4,16 +4,20 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pymongo = "*"
-requests = "*"
-bcrypt = "*"
 django = "*"
-pandas = "*"
-numpy = "*"
 djangorestframework = "*"
-ipdb = "*"
+numpy = "*"
+pandas = "*"
+bcrypt = "*"
+requests = "*"
+pymongo = "*"
+django-environ = "*"
 
 [dev-packages]
+ipdb = "*"
+black = "*"
+isort = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.12"

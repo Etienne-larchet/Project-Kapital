@@ -1,8 +1,9 @@
-import time
 import logging
+import time
 from functools import wraps
 
 logger = logging.getLogger("myapp")
+
 
 def timing(text=None):
     def decorator(func):
@@ -14,5 +15,7 @@ def timing(text=None):
             display_text = text if text else func.__name__
             logger.info(f"{display_text} execution time: {elapsed_time:.6f} seconds")
             return result
+
         return wrapper
+
     return decorator
